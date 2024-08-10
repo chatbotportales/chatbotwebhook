@@ -1,0 +1,15 @@
+{
+  "name": "newfulfillmentwebhook",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dialogflow-fulfillment": "^0.6.1",
+    "express": "^4.19.2"
+  }
+}
