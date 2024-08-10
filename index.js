@@ -29,7 +29,8 @@ app.post('/webhook', express.json(), function(req, res) {
     }
 
     function ProbandoWebhook(agent) {
-        agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook`);
+        const frase = agent.parameters.pregunta;
+        agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook ` + frase);
     }
 
     function PortalesInteractivos(agent) {
