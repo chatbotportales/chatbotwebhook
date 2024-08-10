@@ -33,7 +33,7 @@ app.post('/webhook', express.json(), function(req, res) {
     }
 
     function PortalesInteractivos(agent) {
-        const frase = agent.request_.queryResult.queryResult.queryText;
+        const frase = agent.request_.queryResult.queryResult.parameters.pregunta;
         agent.add(`Estoy enviando esta respuesta desde el webhook` + frase);
     }
 
