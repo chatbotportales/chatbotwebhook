@@ -29,12 +29,12 @@ app.post('/webhook', express.json(), function(req, res) {
     }
 
     function ProbandoWebhook(agent) {
-        agent.add(`Estoy enviando esta respuesta desde el webhook`);
+        agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook`);
     }
 
     function PortalesInteractivos(agent) {
-        const frase = agent.request_.queryResult.parameters.pregunta;
-        agent.add(`Estoy enviando esta respuesta desde el webhook` + frase);
+        const frase = agent.request_.queryResult.queryResult.parameters.pregunta;
+        agent.add(`Estoy enviando esta respuesta desde el PortalesInteractivos ` + frase);
     }
 
     let intentMap = new Map();
