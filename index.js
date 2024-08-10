@@ -33,7 +33,8 @@ app.post('/webhook', express.json(), function(req, res) {
     }
 
     function PortalesInteractivos(agent) {
-        agent.add(`Estos son los portales interactivos de ciudad bolivar`);
+        const frase = agent.request_.queryResult.queryResult.queryText;
+        agent.add(`Estoy enviando esta respuesta desde el webhook` + frase);
     }
 
     let intentMap = new Map();
