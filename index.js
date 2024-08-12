@@ -45,7 +45,7 @@ app.post('/webhook', express.json(), function(req, res) {
             //res.json(docs);
             const text = await getPortalesAsText('portales');
             const frase = agent.parameters.pregunta;
-            agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook ` + frase + text);
+            agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook ` + frase + " === " + text);
 
         } catch (error) {
             console.error(error);
@@ -87,9 +87,9 @@ async function getPortalesAsText(collectionName) {
     }
 }
 
-const PORT = process.env.PORT || 3000;  // Utiliza el puerto proporcionado por Heroku o 3000 para desarrollo local
+const PORT = process.env.PORT || 3000; // Utiliza el puerto proporcionado por Heroku o 3000 para desarrollo local
 
-app.listen(PORT, async () => {
+app.listen(PORT, async() => {
     const text = await getPortalesAsText('portales');
     console.log(text)
     console.log(`Servidor escuchando en http://localhost:${PORT}`);
