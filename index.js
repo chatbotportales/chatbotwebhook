@@ -22,13 +22,9 @@ app.post('/webhook', express.json(), function(req, res) {
 
     async function ProbandoWebhook(agent) {
         try {
-            //const snapshot = await db.collection('portales').get();
-            //const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            //res.json(docs);
             const text = await getPortalesAsText('portales');
-            const frase = agent.parameters.pregunta;
+            const frase = agent.parameters.portales;
             agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook ` + frase + " === " + text);
-
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Error al obtener datos de Firestore' });
@@ -42,8 +38,7 @@ app.post('/webhook', express.json(), function(req, res) {
             //res.json(docs);
             const text = await getPortalesAsText('portales');
             const portales = agent.parameters.portales;
-            agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook ` + portales + " === " + text);
-
+            agent.add(`Estoy enviando esta respuesta desde el PortalesInteractivos ` + portales + " === " + text);
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Error al obtener datos de Firestore' });
@@ -51,8 +46,6 @@ app.post('/webhook', express.json(), function(req, res) {
     }
 
     let intentMap = new Map();
-    intentMap.set('Default Welcome Intent', welcome);
-    intentMap.set('Default Fallback Intent', fallback);
     intentMap.set('ProbandoWebhook', ProbandoWebhook);
     intentMap.set('PortalesInteractivos', PortalesInteractivos);
     agent.handleRequest(intentMap);
