@@ -20,25 +20,7 @@ app.post('/webhook', express.json(), function(req, res) {
     console.log('Dialogflow Request headers: ' + JSON.stringify(req.headers));
     console.log('Dialogflow Request body: ' + JSON.stringify(req.body));
 
-    function welcome(agent) {
-        agent.add(`Welcome to my agent!`);
-    }
-
-    function fallback(agent) {
-        const messages = [
-            `Ups, no he entendido a que te refieres.`,
-            `¿Podrías repetirlo, por favor?`,
-            `¿Disculpa?`,
-            `¿Decías?`,
-            `¿Cómo?`,
-            `¿No entiendo? Escribe 'Hola' para interactuar`
-        ];
-        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-        agent.add(randomMessage);
-    }
-
     async function ProbandoWebhook(agent) {
-
         try {
             //const snapshot = await db.collection('portales').get();
             //const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -53,9 +35,19 @@ app.post('/webhook', express.json(), function(req, res) {
         }
     }
 
-    function PortalesInteractivos(agent) {
-        const frase = agent.parameters.pregunta;
-        agent.add(`Estoy enviando esta respuesta desde el PortalesInteractivos ` + frase);
+    async function PortalesInteractivos(agent) {
+        try {
+            //const snapshot = await db.collection('portales').get();
+            //const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            //res.json(docs);
+            const text = await getPortalesAsText('portales');
+            const portales = agent.parameters.portales;
+            agent.add(`Estoy enviando esta respuesta desde el ProbandoWebhook ` + portales + " === " + text);
+
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Error al obtener datos de Firestore' });
+        }
     }
 
     let intentMap = new Map();
