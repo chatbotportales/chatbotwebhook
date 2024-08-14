@@ -36,8 +36,9 @@ app.post('/webhook', express.json(), function(req, res) {
             //const snapshot = await db.collection('portales').get();
             //const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             //res.json(docs);
-            const text = await getPortalesAsText('portales');
+
             const portales = agent.parameters.portales;
+            const text = await getDataPortal(portales);
             agent.add(`Estoy enviando esta respuesta desde el PortalesInteractivos ` + portales + " === " + text);
         } catch (error) {
             console.error(error);
@@ -50,6 +51,52 @@ app.post('/webhook', express.json(), function(req, res) {
     intentMap.set('PortalesInteractivos', PortalesInteractivos);
     agent.handleRequest(intentMap);
 })
+
+async function getDataPortal(portalName) {
+    try {
+        const snapshot = await db.collection("portales").get();
+        const docs = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.name,
+                email: data.email,
+                address: data.address,
+                linkMap: data.linkMap,
+                phone: data.phone,
+                url: data.url,
+                mondayEndTime: data.mondayEndTime,
+                mondayStartTime: data.mondayStartTime,
+                saturdayEndTime: data.saturdayEndTime,
+                saturdayStartTime: data.saturdayStartTime,
+                image: data.image
+            };
+        }).filter(data.name === portalName);
+
+        // Convertir los datos a texto
+        const portal = JSON.stringify(docs, null, 12); // Formateo con sangrías
+        const infoPortal = JSON.parse(portal);
+
+        const startWeek = new Date(infoPortal.mondayStartTime).toISOString().slice(11, 16);
+        const endWeek = new Date(infoPortal.mondayEndTime).toISOString().slice(11, 16);
+        const startWeekend = new Date(infoPortal.saturdayStartTime).toISOString().slice(11, 16);
+        const endWeekend = new Date(infoPortal.saturdayEndTime).toISOString().slice(11, 16);
+
+        const textOutput = "Esta es la información del Portal " + infoPortal.name + "\n " +
+            "Dirección: " + infoPortal.address + "\n " +
+            "Teléfono" + infoPortal.phone + "\n " +
+            "email" + infoPortal.email + "\n " +
+            "Horario Lunes a Viernes: " + startWeek + " a " + endWeek + "\n " +
+            "Horario Sábados: " + startWeekend + " a " + endWeekend + "\n " +
+            "ubicación :" + infoPortal.linkMap + "\n ";
+
+        return textOutput;
+
+    } catch (error) {
+        console.error('Error al obtener datos de Firestore:', error);
+        throw new Error('Error al obtener datos de Firestore');  
+    }
+}
 
 async function getPortalesAsText(collectionName) {
     try {
