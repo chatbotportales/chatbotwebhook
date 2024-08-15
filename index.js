@@ -38,8 +38,8 @@ app.post('/webhook', express.json(), function(req, res) {
             //res.json(docs);
 
             const portales = agent.parameters.portales;
-            const text = await getDataPortal(portales);
-            agent.add(`Estoy enviando esta respuesta desde el PortalesInteractivos ` + portales + " === " + text);
+            const respuesta = await getDataPortal(portales);
+            agent.add(respuesta);
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Error al obtener datos de Firestore' });
@@ -54,7 +54,7 @@ app.post('/webhook', express.json(), function(req, res) {
 
 async function getDataPortal(portalName) {
     try {
-        const snapshot = await db.collection("portales").get();
+        const snapshot = await db.collection('portales').get();
         const docs = snapshot.docs.map(doc => {
             const data = doc.data();
             return {
@@ -71,31 +71,34 @@ async function getDataPortal(portalName) {
                 saturdayStartTime: data.saturdayStartTime,
                 image: data.image
             };
-        }).filter(data.name === portalName);
+        });
 
-        // Convertir los datos a texto
-        const portal = JSON.stringify(docs, null, 12); // Formateo con sangrías
-        const infoPortal = JSON.parse(portal);
-
-        const startWeek = new Date(infoPortal.mondayStartTime).toISOString().slice(11, 16);
-        const endWeek = new Date(infoPortal.mondayEndTime).toISOString().slice(11, 16);
-        const startWeekend = new Date(infoPortal.saturdayStartTime).toISOString().slice(11, 16);
-        const endWeekend = new Date(infoPortal.saturdayEndTime).toISOString().slice(11, 16);
-
-        const textOutput = "Esta es la información del Portal " + infoPortal.name + "\n " +
-            "Dirección: " + infoPortal.address + "\n " +
-            "Teléfono" + infoPortal.phone + "\n " +
-            "email" + infoPortal.email + "\n " +
-            "Horario Lunes a Viernes: " + startWeek + " a " + endWeek + "\n " +
-            "Horario Sábados: " + startWeekend + " a " + endWeekend + "\n " +
-            "ubicación :" + infoPortal.linkMap + "\n ";
-
-        return textOutput;
+        const filteredData = docs.filter(obj => obj.name === portalName);
+        //const filteredJsonString = JSON.stringify(filteredData, null, 2);
+        return filteredData.map(formatData).join("\n\n");
 
     } catch (error) {
         console.error('Error al obtener datos de Firestore:', error);
         throw new Error('Error al obtener datos de Firestore');  
     }
+}
+
+// Función para formatear un objeto en una cadena legible
+function formatData(obj) {
+    return `
+  Esta es la información del ${obj.name}
+  Dirección: ${obj.address}
+  Email: ${obj.email}
+  Teléfono: ${obj.phone}
+  Mapa: ${obj.linkMap}
+  URL: ${obj.url}
+  Horario Lunes a Viernes: ${extractSubstring(obj.mondayStartTime)} a ${extractSubstring(obj.mondayEndTime)}
+  Horario Sábados: ${extractSubstring(obj.saturdayStartTime)} a ${extractSubstring(obj.saturdayEndTime)}
+    `.trim(); // `trim()` elimina los espacios en blanco al principio y al final
+}
+
+function extractSubstring(dateTimeString) {
+    return dateTimeString.substring(11, 16);
 }
 
 async function getPortalesAsText(collectionName) {
@@ -122,7 +125,8 @@ async function getPortalesAsText(collectionName) {
 const PORT = process.env.PORT || 3000; // Utiliza el puerto proporcionado por Heroku o 3000 para desarrollo local
 
 app.listen(PORT, async() => {
-    const text = await getPortalesAsText('portales');
-    console.log(text)
+    //const text = await getPortalesAsText('portales');
+    const textq = await getDataPortal('Portal Perdomo');
+    console.log(textq)
     console.log(`Servidor escuchando en http://localhost:${PORT}`);
 });
