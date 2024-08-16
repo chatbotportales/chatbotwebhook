@@ -46,11 +46,30 @@ app.post('/webhook', express.json(), function(req, res) {
         }
     }
 
+    async function CursosPorPortal() {
+        try {
+            const portales = 'Portal Perdomo'//agent.parameters.portales;
+            const idPortal = await getDataIDPortal(portales)
+            let respuesta = "No se encontro el "+portales+ " en la base de datos."
+            if (idPortal) {
+                respuesta = await getCoursesNameByPortal(idPortal);
+                respuesta = await formatCourseNameList(respuesta);
+            }
+            console.log(respuesta)
+            agent.add(respuesta);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Error al obtener datos de Firestore' });
+        }
+    }
+
     let intentMap = new Map();
     intentMap.set('ProbandoWebhook', ProbandoWebhook);
     intentMap.set('PortalesInteractivos', PortalesInteractivos);
+    intentMap.set('CursosPorPortal', CursosPorPortal);
     agent.handleRequest(intentMap);
 })
+
 
 async function getDataPortal(portalName) {
     try {
@@ -83,6 +102,84 @@ async function getDataPortal(portalName) {
     }
 }
 
+
+async function getDataIDPortal(portalName) {
+    try {
+        const snapshot = await db.collection('portales').get();
+        const docs = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.name,
+            };
+        });
+
+        const filteredData = docs.filter(obj => obj.name === portalName);
+
+        // Verifica si se encontraron datos y retorna el id del primer portal encontrado
+        if (filteredData.length === 0) {
+            console.log('No matching portal found.');
+            return null; // No se encontró ningún portal
+        }
+
+        return filteredData[0].id; // Retorna el id del primer portal encontrado
+
+    } catch (error) {
+        console.error('Error al obtener datos de Firestore:', error);
+        throw new Error('Error al obtener datos de Firestore');
+    }
+}
+
+
+async function getCoursesByPortal(idPortal) {
+    try {
+        const coursesRef = db.collection('courses');
+        const query = coursesRef.where('idPortal', '==', idPortal);
+        const snapshot = await query.get();
+
+        if (snapshot.empty) {
+            console.log('No courses found with the given idportal')
+            //res.status(404).send('No courses found with the given idportal');
+            return [];
+        }
+
+        const courses = [];
+        snapshot.forEach(doc => {
+            courses.push({ id: doc.id, ...doc.data() });
+        });
+
+        //res.status(200).json(courses);
+        //console.log(courses)
+        return courses
+    } catch (error) {
+        console.error('Error getting documents', error);
+        //res.status(500).send('Error retrieving courses');
+    }
+}
+
+async function getCoursesNameByPortal(idPortal) {
+    try {
+        const coursesRef = db.collection('courses');
+        const query = coursesRef.where('idPortal', '==', idPortal).where('status', '==', 'activo').select('name');
+        const snapshot = await query.get();
+
+        if (snapshot.empty) {
+            //res.status(404).send('No se encontraron cursos con el idportal dado');
+            return [];
+        }
+
+        const courses = [];
+        snapshot.forEach(doc => {
+            courses.push({ name: doc.data().name });
+        });
+
+        return courses
+
+    } catch (error) {
+        console.error('Error al obtener los documentos', error);
+    }
+
+}
 // Función para formatear un objeto en una cadena legible
 function formatData(obj) {
     return `
@@ -94,6 +191,21 @@ function formatData(obj) {
   URL: ${obj.url}
   Horario Lunes a Viernes: ${extractSubstring(obj.mondayStartTime)} a ${extractSubstring(obj.mondayEndTime)}
   Horario Sábados: ${extractSubstring(obj.saturdayStartTime)} a ${extractSubstring(obj.saturdayEndTime)}
+    `.trim(); // `trim()` elimina los espacios en blanco al principio y al final
+}
+
+function formatCourseNameList(courses) {
+    if (courses.length === 0) {
+        return 'No se encontraron cursos.';
+    }
+
+    // Construimos el listado de nombres
+    const courseNames = courses.map(course => `- ${course.name}`).join('\n');
+    
+    return `
+    Lista de cursos encontrados:
+
+    ${courseNames}
     `.trim(); // `trim()` elimina los espacios en blanco al principio y al final
 }
 
@@ -126,7 +238,7 @@ const PORT = process.env.PORT || 3000; // Utiliza el puerto proporcionado por He
 
 app.listen(PORT, async() => {
     //const text = await getPortalesAsText('portales');
-    const textq = await getDataPortal('Portal Perdomo');
-    console.log(textq)
+    //CursosPorPortal()//('Portal Perdomo');
+    //console.log(textq)
     console.log(`Servidor escuchando en http://localhost:${PORT}`);
 });
