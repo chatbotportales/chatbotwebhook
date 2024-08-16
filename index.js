@@ -67,7 +67,7 @@ app.post('/webhook', express.json(), function(req, res) {
         try {
             const portales = agent.parameters.portales;
             const namecurso = agent.parameters.curso;
-            print(agent.parameters)
+            
             const idPortal = await getDataIDPortal(portales)
             let respuesta = "No se encontro el "+portales+ " en la base de datos."
             if(namecurso){
