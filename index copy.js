@@ -11,10 +11,6 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-app.get('/', function(req, res) {
-    res.send('Hello World')
-})
-
 app.post('/webhook', express.json(), function(req, res) {
     const agent = new WebhookClient({ request: req, response: res });
     console.log('Dialogflow Request headers: ' + JSON.stringify(req.headers));
@@ -50,7 +46,7 @@ app.post('/webhook', express.json(), function(req, res) {
         try {
             const portales = agent.parameters.portales;
             const idPortal = await getDataIDPortal(portales)
-            let respuesta = "No se encontro el "+portales+ " en la base de datos."
+            let respuesta = "No se encontro el " + portales + " en la base de datos."
             if (idPortal) {
                 respuesta = await getCoursesNameByPortal(idPortal);
                 respuesta = await formatCourseNameList(respuesta);
@@ -67,11 +63,11 @@ app.post('/webhook', express.json(), function(req, res) {
         try {
             const portales = agent.parameters.portales;
             const namecurso = agent.parameters.curso;
-            
+
             const idPortal = await getDataIDPortal(portales)
-            let respuesta = "No se encontro el "+portales+ " en la base de datos."
-            if(namecurso){
-                if (idPortal ) {
+            let respuesta = "No se encontro el " + portales + " en la base de datos."
+            if (namecurso) {
+                if (idPortal) {
                     const cursos = await getCourseByPortal(idPortal, namecurso);
                     respuesta = await formatCourseList(cursos, portales);
                 }
@@ -84,7 +80,7 @@ app.post('/webhook', express.json(), function(req, res) {
         }
     }
 
-    
+
 
     let intentMap = new Map();
     intentMap.set('ProbandoWebhook', ProbandoWebhook);
@@ -93,8 +89,6 @@ app.post('/webhook', express.json(), function(req, res) {
     intentMap.set('ObtenerInformacionCurso', ObtenerInformacionCurso);
     agent.handleRequest(intentMap);
 })
-
-
 
 async function getDataPortal(portalName) {
     try {
@@ -197,7 +191,7 @@ async function getAllCoursesByPortal(idPortal) {
 
         if (snapshot.empty) {
             console.log('No courses found with the given idportal')
-            //res.status(404).send('No courses found with the given idportal');
+                //res.status(404).send('No courses found with the given idportal');
             return [];
         }
 
@@ -260,7 +254,7 @@ function formatCourseNameList(courses) {
     // Construimos el listado de nombres
     const courseNames = courses.map(course => `- ${course.name}
     `).join(`\n`);
-    
+
     return `
     Lista de cursos encontrados:
   
@@ -273,7 +267,7 @@ function formatCourseList(course, portalName) {
     if (course.length === 0) {
         return `No se encontraron cursos.`;
     }
-    
+
     return `
 
     Curso: ${course[0].name}
@@ -314,50 +308,50 @@ async function getPortalesAsText(collectionName) {
 
 // Implementación de la distancia de Levenshtein
 function levenshtein(a, b) {
-  const alen = a.length;
-  const blen = b.length;
-  const arr = [];
+    const alen = a.length;
+    const blen = b.length;
+    const arr = [];
 
-  // Inicializar la matriz
-  for (let i = 0; i <= alen; i++) {
-    arr[i] = [i];
-  }
-
-  for (let j = 1; j <= blen; j++) {
-    arr[0][j] = j;
-  }
-
-  // Llenar la matriz
-  for (let i = 1; i <= alen; i++) {
-    for (let j = 1; j <= blen; j++) {
-      const tmp = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
-      arr[i][j] = Math.min(
-        arr[i - 1][j] + 1, // Eliminación
-        arr[i][j - 1] + 1, // Inserción
-        arr[i - 1][j - 1] + tmp // Sustitución
-      );
+    // Inicializar la matriz
+    for (let i = 0; i <= alen; i++) {
+        arr[i] = [i];
     }
-  }
 
-  return arr[alen][blen];
+    for (let j = 1; j <= blen; j++) {
+        arr[0][j] = j;
+    }
+
+    // Llenar la matriz
+    for (let i = 1; i <= alen; i++) {
+        for (let j = 1; j <= blen; j++) {
+            const tmp = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+            arr[i][j] = Math.min(
+                arr[i - 1][j] + 1, // Eliminación
+                arr[i][j - 1] + 1, // Inserción
+                arr[i - 1][j - 1] + tmp // Sustitución
+            );
+        }
+    }
+
+    return arr[alen][blen];
 }
 
 // Encuentra el nombre más similar
 function findMostSimilarName(docs, portalName) {
-  if (docs.length === 0) return [];
+    if (docs.length === 0) return [];
 
-  let mostSimilar = docs[0];
-  let smallestDistance = levenshtein(portalName, mostSimilar.name);
+    let mostSimilar = docs[0];
+    let smallestDistance = levenshtein(portalName, mostSimilar.name);
 
-  for (let i = 1; i < docs.length; i++) {
-    const distance = levenshtein(portalName, docs[i].name);
-    if (distance < smallestDistance) {
-      smallestDistance = distance;
-      mostSimilar = docs[i];
+    for (let i = 1; i < docs.length; i++) {
+        const distance = levenshtein(portalName, docs[i].name);
+        if (distance < smallestDistance) {
+            smallestDistance = distance;
+            mostSimilar = docs[i];
+        }
     }
-  }
 
-  return mostSimilar;
+    return mostSimilar;
 }
 
 const PORT = process.env.PORT || 3000; // Utiliza el puerto proporcionado por Heroku o 3000 para desarrollo local

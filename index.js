@@ -48,9 +48,9 @@ app.post('/webhook', express.json(), function(req, res) {
 
     async function CursosPorPortal() {
         try {
-            const portales = 'Portal Perdomo'//agent.parameters.portales;
+            const portales = 'Portal Perdomo' //agent.parameters.portales;
             const idPortal = await getDataIDPortal(portales)
-            let respuesta = "No se encontro el "+portales+ " en la base de datos."
+            let respuesta = "No se encontro el " + portales + " en la base de datos."
             if (idPortal) {
                 respuesta = await getCoursesNameByPortal(idPortal);
                 respuesta = await formatCourseNameList(respuesta);
@@ -67,6 +67,7 @@ app.post('/webhook', express.json(), function(req, res) {
     intentMap.set('ProbandoWebhook', ProbandoWebhook);
     intentMap.set('PortalesInteractivos', PortalesInteractivos);
     intentMap.set('CursosPorPortal', CursosPorPortal);
+    intentMap.set('ObtenerInformacionCurso', ObtenerInformacionCurso);
     agent.handleRequest(intentMap);
 })
 
@@ -130,6 +131,26 @@ async function getDataIDPortal(portalName) {
     }
 }
 
+async function ObtenerInformacionCurso() {
+    try {
+        const portales = agent.parameters.portales;
+        const namecurso = agent.parameters.curso;
+
+        const idPortal = await getDataIDPortal(portales)
+        let respuesta = "No se encontro el " + portales + " en la base de datos."
+        if (namecurso) {
+            if (idPortal) {
+                const cursos = await getCoursesByPortal(idPortal, namecurso);
+                respuesta = await formatCourseList(cursos, portales);
+            }
+        }
+        console.log(respuesta)
+        agent.add(respuesta);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener datos de Firestore' });
+    }
+}
 
 async function getCoursesByPortal(idPortal) {
     try {
@@ -139,7 +160,7 @@ async function getCoursesByPortal(idPortal) {
 
         if (snapshot.empty) {
             console.log('No courses found with the given idportal')
-            //res.status(404).send('No courses found with the given idportal');
+                //res.status(404).send('No courses found with the given idportal');
             return [];
         }
 
@@ -155,6 +176,23 @@ async function getCoursesByPortal(idPortal) {
         console.error('Error getting documents', error);
         //res.status(500).send('Error retrieving courses');
     }
+}
+
+function formatCourseList(course, portalName) {
+    if (course.length === 0) {
+        return `No se encontraron cursos.`;
+    }
+
+    return `
+
+    Curso: ${course[0].name}
+    Descripcion: ${course[0].description}
+    Duracion: ${course[0].duration}
+    Modalidad: ${course[0].modality}
+    Prerequisitos: ${course[0].prerequisites}
+    Portal: ${portalName}
+    
+    `.trim();
 }
 
 async function getCoursesNameByPortal(idPortal) {
@@ -201,7 +239,7 @@ function formatCourseNameList(courses) {
 
     // Construimos el listado de nombres
     const courseNames = courses.map(course => `- ${course.name}`).join('\n');
-    
+
     return `
     Lista de cursos encontrados:
 
