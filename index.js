@@ -67,7 +67,7 @@ app.post('/webhook', express.json(), function(req, res) {
     intentMap.set('ProbandoWebhook', ProbandoWebhook);
     intentMap.set('PortalesInteractivos', PortalesInteractivos);
     intentMap.set('CursosPorPortal', CursosPorPortal);
-    intentMap.set('ObtenerInformacionCurso', ObtenerInformacionCurso);
+    //intentMap.set('ObtenerInformacionCurso', ObtenerInformacionCurso);
     agent.handleRequest(intentMap);
 })
 
