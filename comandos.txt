@@ -1,0 +1,14 @@
+heroku logs --tail
+
+git clone https://git.heroku.com/quiet-tundra-78611.git
+
+git add .
+git commit -m " 
+
+
+git push heroku main
+git remote add heroku https://git.heroku.com/quiet-tundra-78611.git
+heroku login                                      
+
+
+git reset --hard heroku/main

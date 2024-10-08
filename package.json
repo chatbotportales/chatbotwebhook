@@ -10,6 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@google-cloud/dialogflow-cx": "^4.8.0",
     "dialogflow-fulfillment": "^0.6.1",
     "express": "^4.19.2",
     "firebase-admin": "^12.3.1",

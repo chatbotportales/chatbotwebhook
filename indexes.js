@@ -3,8 +3,7 @@ const admin = require('firebase-admin');
 const serviceAccount = require('./firebase-adminsdk.json'); // Ruta al archivo de configuración
 const app = express();
 const { WebhookClient } = require('dialogflow-fulfillment'); // Para Dialogflow ES
-const { Card, Suggestion } = require('dialogflow-fulfillment');
-const { onNewNonfatalIssuePublished } = require('firebase-functions/v2/alerts/crashlytics');
+const { Suggestion } = require('dialogflow-fulfillment');
 const { SessionsClient } = require('@google-cloud/dialogflow-cx');
 
 admin.initializeApp({
@@ -21,51 +20,6 @@ const sessionClient = new SessionsClient({
     projectId: projectId
 });
 
-// Ruta para Dialogflow CX
-app.post('/webhookcx', express.json(), async (req, res) => {
-    try {
-        const sessionPath = sessionClient.projectAgentSessionPath(projectId, req.body.sessionId);
-        const request = {
-            session: sessionPath,
-            queryInput: {
-                text: {
-                    text: req.body.queryResult.queryText,
-                },
-                languageCode: 'en-US',
-            },
-        };
-
-        const [response] = await sessionClient.detectIntent(request);
-        const intent = response.queryResult.intent.displayName;
-        let responseText = '';
-
-        if (intent === 'PortalesInteractivos') {
-            const portales = req.body.queryResult.parameters.portales;
-            const respuesta = await getDataPortal(portales);
-            if (respuesta.length != 0) {
-                responseText = respuesta.split('\n').join('\n');
-                responseText += "\nPuedes consultar:\nCursos " + portales + "\nPreguntas Frecuentes " + portales;
-            } else {
-                responseText = "No entendí 😢 ¿Podrías escribírmelo de otra forma?";
-            }
-        }
-        // Añade más intents y procesamiento aquí según sea necesario
-
-        res.json({
-            fulfillmentMessages: [
-                {
-                    text: {
-                        text: [responseText]
-                    }
-                }
-            ]
-        });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error al obtener datos de Firestore' });
-    }
-});
-
 app.post('/webhook', express.json(), function (req, res) {
     const agent = new WebhookClient({ request: req, response: res });
 
@@ -73,19 +27,9 @@ app.post('/webhook', express.json(), function (req, res) {
         try {
             const portales = agent.parameters.portales;
             const respuesta = await getDataPortal(portales);
-            console.log("respuesta = " + respuesta.length);
 
             if (respuesta.length != 0) {
-                const lineas = respuesta.split('\n');
-                for (let i = 0; i < lineas.length; i++) {
-                    if (lineas[i] !== "") {
-                        agent.add(lineas[i]);
-                    }
-                }
-
-                agent.add("Puedes consultar:");
-                agent.add(new Suggestion('Cursos ' + portales));
-                agent.add(new Suggestion('Preguntas Frecuentes ' + portales));
+                agent.add(respuesta);
             } else {
                 agent.add("No entendí 😢 ¿Podrías escribírmelo de otra forma?");
             }
@@ -98,20 +42,18 @@ app.post('/webhook', express.json(), function (req, res) {
 
     async function CursosPorPortal() {
         try {
-            const portales = agent.parameters.portales;
-            const idPortal = await getDataIdPortal(portales)
+            const portal = agent.parameters.portales;
+            const idPortal = await getDataIdPortal(portal)
 
             if (idPortal) {
                 cursos = await getCoursesNameByPortal(idPortal);
-                agent.add(`${portales} tiene los siguientes curso habilitados:`);
-                for (let i = 0; i < cursos.length; i++) {
-                    agent.add(new Suggestion(cursos[i].name + " - " + portales));
-                }
+                cursosDataFormat = formatDataCursos(cursos, portal);
+
+                agent.add(cursosDataFormat);
+
             } else {
-                agent.add("No se encontro el " + portales + " en la base de datos. Vuelve a intentarlo por favor");
+                agent.add("No se encontro el " + portal + " en la base de datos. Vuelve a intentarlo por favor");
             }
-
-
         } catch (error) {
             console.error('Error al obtener datos de Firestore:', error);
             res.status(500).json({ error: 'Error al obtener datos de Firestore' });
@@ -120,18 +62,41 @@ app.post('/webhook', express.json(), function (req, res) {
 
     async function Portales() {
         try {
-           
+
             portales = await getPortals();
-            agent.add(`Estos son los Portales Intercativos de Ciudad Bolivar:`);
-            
-            for (let i = 0; i < portales.length; i++) {
-                //console.log(portales[i].name)
-                agent.add(new Suggestion(portales[i].name));
-            }
-    
-    
+            let dataPortals = formatDataTotalPortales(portales);
+            agent.add(dataPortals);
+
         } catch (error) {
             //console.error('Error al obtener datos de Firestore:', error);
+            res.status(500).json({ error: 'Error al obtener datos de Firestore' });
+        }
+    }
+
+    async function ObtenerInformacionCurso(agent) {
+        try {
+            let respuesta = "";
+            const portal = agent.parameters.portales;
+            const namecurso = agent.parameters.curso;
+
+            const idPortal = await getDataIdPortal(portal)
+            const cursos = await getCoursesByPortal(idPortal, namecurso);
+
+            // Validación de parámetros
+            if (!portal || !namecurso) {
+                respuesta = "Lo siento, no encontre el portal ni el curso";
+                if (portal || !namecurso) {
+                    respuesta = "Lo siento, no encontre en el " + portal + " el curso " + namecurso;
+                }
+
+            } else {
+                respuesta = await formatCourseList(cursos, portal);
+            }
+
+            agent.add(respuesta);
+
+        } catch (error) {
+            console.error('Error al obtener datos de Firestore:', error);
             res.status(500).json({ error: 'Error al obtener datos de Firestore' });
         }
     }
@@ -141,61 +106,48 @@ app.post('/webhook', express.json(), function (req, res) {
             const portales = agent.parameters.portales;
             const idPortal = await getDataIdPortal(portales)
 
+            let respuestas = '';
+
             if (idPortal) {
                 FQs = await getQuestionByPortal(idPortal);
-                agent.add(`${portales} deseas consultar sobre:`);
-                for (let i = 0; i < FQs.length; i++) {
-                    agent.add(new Suggestion("Preguntar: " + FQs[i].ask + " - " + portales));
-                }
-
-                agent.add(new Suggestion('Cursos ' + portales));
-                agent.add(new Suggestion('Preguntas Frecuentes ' + portales));
-
+                respuestas = formatDataPreguntas(FQs, portales);
+                agent.add(respuestas);
             } else {
                 agent.add("No se encontro el " + portales + " en la base de datos. Vuelve a intentarlo por favor");
             }
-
-
         } catch (error) {
             console.error('Error al obtener datos de Firestore:', error);
             res.status(500).json({ error: 'Error al obtener datos de Firestore' });
         }
     }
 
-    
-    async function RespuestasPreguntasFrecuentes() {
+
+    async function RespuestasFrecuentes(agent) {
+        console.log("Entro aqui");
         try {
-            const portal = agent.parameters.portales;
-            const ask = agent.parameters.ask;
+            const portales = agent.parameters.portales;
+            const respuestasfrecuentes = agent.parameters.respuestasfrecuentes;
 
-            const idPortal = await getDataIdPortal(portal)
-            let respuesta = "No se encontro el " + portal + " en la base de datos."
+            console.log(portales);
+            console.log(respuestasfrecuentes);
 
-            //console.log("portal = " + portal);
-            //console.log("ask = " + ask);
+            const idPortal = await getDataIdPortal(portales)
+            let respuesta = "No se encontro el " + portales + " en la base de datos."
 
-            if (ask) {
+            console.log(idPortal);
+
+            if (respuestasfrecuentes) {
                 if (idPortal) {
-                    const answerFQs = await getAnswerByPortal(idPortal, ask);
-                    respuesta = await formatAnswerList(answerFQs, portal);
+                    const answerFQs = await getAnswerByPortal(idPortal, respuestasfrecuentes);
+                    console.log(answerFQs);
+                    respuesta = await formatAnswerList(answerFQs, idPortal);
                 }
             }
-            const listData = respuesta.split("\n");
-
-            for (let i = 0; i < listData.length; i++) {
-                if (listData[i] !== "") {
-                    //console.log(listData[i])
-                    agent.add(listData[i]);
-                }
-            }
-            if( idPortal ){
-                agent.add(new Suggestion('Cursos ' + portal));
-                agent.add(new Suggestion('Preguntas Frecuentes ' + portal));
-            }
-
+            console.log(respuesta);
+            agent.add(respuesta);
         } catch (error) {
             console.error('Error al obtener datos de Firestore:', error);
-            //res.status(500).json({ error: 'Error al obtener datos de Firestore' });
+            res.status(500).json({ error: 'Error al obtener datos de Firestore' });
         }
     }
 
@@ -205,42 +157,13 @@ app.post('/webhook', express.json(), function (req, res) {
     intentMap.set('CursosPorPortal', CursosPorPortal);
     intentMap.set('ObtenerInformacionCurso', ObtenerInformacionCurso);
     intentMap.set('PreguntasFrecuentesPortal', PreguntasFrecuentesPortal);
-    intentMap.set('RespuestasPreguntasFrecuentes', RespuestasPreguntasFrecuentes);
+    intentMap.set('RespuestasFrecuentes', RespuestasFrecuentes);
     intentMap.set('Portales', Portales);
     agent.handleRequest(intentMap);
 })
 
 
-async function ObtenerInformacionCurso(agent) {
-    try {
-        const portal = agent.parameters.portales;
-        const namecurso = agent.parameters.curso;
 
-        const idPortal = await getDataIdPortal(portal)
-        let respuesta = "No se encontro el " + portal + " en la base de datos."
-
-        console.log("portal = " + portal);
-        console.log("namecurso = " + namecurso);
-
-        if (namecurso) {
-            if (idPortal) {
-                const cursos = await getCoursesByPortal(idPortal, namecurso);
-                respuesta = await formatCourseList(cursos, portal);
-            }
-        }
-        const listDataCursos = respuesta.split("\n");
-
-        for (let i = 0; i < listDataCursos.length; i++) {
-            if (listDataCursos[i] !== "") {
-                agent.add(listDataCursos[i]);
-            }
-        }
-
-    } catch (error) {
-        console.error('Error al obtener datos de Firestore:', error);
-        res.status(500).json({ error: 'Error al obtener datos de Firestore' });
-    }
-}
 
 async function getDataPortal(portalName) {
     try {
@@ -261,10 +184,8 @@ async function getDataPortal(portalName) {
             };
         });
 
-        /*const mostSimilarDoc = findMostSimilarName(docs, portalName);
-        const filteredData = mostSimilarDoc ? [mostSimilarDoc] : [];*/
         const filteredData = docs.filter(obj => obj.name === portalName);
-        return filteredData.map(formatData).join("\n");
+        return filteredData.map(formatDataPortal).join("\n");
 
     } catch (error) {
         console.error('Error al obtener datos de Firestore:', error);
@@ -312,13 +233,7 @@ async function getCoursesByPortal(idPortal, referenceName = '', maxDistance = 2)
             courses.push({ id: doc.id, ...doc.data() });
         });
 
-
-
         const filteredCourses = courses.filter(course => {
-            console.log("course.name = " + course.name);
-            console.log("course.name.toLowerCase() = " + course.name.toLowerCase());
-            console.log("referenceName = " + referenceName);
-            console.log("referenceName.toLowerCase() = " + referenceName.toLowerCase());
             const distance = levenshtein(course.name.toLowerCase(), referenceName.toLowerCase());
             return distance <= maxDistance;
         });
@@ -332,7 +247,6 @@ async function getCoursesByPortal(idPortal, referenceName = '', maxDistance = 2)
 
 async function getAnswerByPortal(idPortal, referenceName = '', maxDistance = 2) {
     try {
-
         const fQRef = db.collection('frequentQuestions');
         const query = fQRef.where('idPortal', '==', idPortal);
         const snapshot = await query.get();
@@ -346,7 +260,10 @@ async function getAnswerByPortal(idPortal, referenceName = '', maxDistance = 2) 
             FQ.push({ id: doc.id, ...doc.data() });
         });
 
+
+
         const filteredFQ = FQ.filter(fquestion => {
+
             console.log("fquestion.ask = " + fquestion.ask);
             console.log("fquestion.name.toLowerCase() = " + fquestion.ask.toLowerCase());
             console.log("referenceName = " + referenceName);
@@ -362,32 +279,12 @@ async function getAnswerByPortal(idPortal, referenceName = '', maxDistance = 2) 
     }
 }
 
-function formatCourseList(course, portalName) {
-    if (course.length === 0) {
-        return `Lo siento, este curso no está entre mis datos`;
-    }
 
-    return `Curso: ${course[0].name}\n
-Descripcion: ${course[0].description}\n
-Duracion: ${course[0].duration}\n
-Modalidad: ${course[0].modality}\n
-Prerequisitos: ${course[0].prerequisites}\n
-Portal: ${portalName}`.trim();
-}
-
-function formatAnswerList(answer, portalName) {
+function formatAnswerList(answer) {
     if (answer.length === 0) {
-        return `Lo siento, este curso no está entre mis datos`;
+        return `Lo siento, esa pregunta no la reconozco`;
     }
-    url = ""
-    if( answer[0].url){
-        url = `url ${answer[0].url}\n`
-    }
-        
-    return `Pregunta: ${answer[0].ask}\n
-Respuesta: ${answer[0].answer}\n
-${url}
-Portal: ${portalName}`.trim();
+    return `${answer[0].answer}`;
 }
 
 async function getCoursesNameByPortal(idPortal) {
@@ -458,16 +355,73 @@ async function getQuestionByPortal(idPortal) {
     }
 
 }
-// Función para formatear un objeto en una cadena legible
-function formatData(obj) {
-    return `Esta es la información del ${obj.name}:
- 
-${obj.address ? `Dirección: ${obj.address}` : ''}
-${obj.email ? `Email: ${obj.email}` : ''}
-${obj.phone ? `Teléfono: ${obj.phone}` : ''}
-${obj.url ? `URL: ${obj.url}` : ''}
-${obj.mondayStartTime && obj.mondayEndTime ? `Horario Lunes a Viernes: ${extractSubstring(obj.mondayStartTime)} a ${extractSubstring(obj.mondayEndTime)}` : ''}
-${obj.saturdayStartTime && obj.saturdayEndTime ? `Horario Sábados: ${extractSubstring(obj.saturdayStartTime)} a ${extractSubstring(obj.saturdayEndTime)}` : ''}`.trim();
+
+
+//Formato de respuesta para el chatbot
+
+//Formato para consulta de preguntas frecuentes de un portal
+function formatDataPreguntas(listPreguntas, portales) {
+    if (listPreguntas.length === 0) {
+        return `No hay preguntas frecuentes disponibles para el portal ${portales}.`;
+    }
+    const preguntas = listPreguntas.map(preguntas => preguntas.ask).join(', ');
+    return `Puedes preguntar en el ${portales} sobre ${preguntas}; Haz tu pregunta sobre estos temas.`;
+}
+
+//Formato consulta de curso de un portal elegido
+function formatCourseList(course, portalName) {
+    if (course.length === 0) {
+        return `Lo siento, este curso no está entre mis datos. consulta otro curso`;
+    }
+
+    return `Que bueno que preguntas por el curso ${course[0].name}. 
+    ${course[0].description ? `ese es un ${course[0].description}, ` : ''}
+    ${course[0].duration ? `tiene una duración de ${course[0].duration}, ` : ''}
+    ${course[0].modality ? `su modalidad es ${course[0].modality}, ` : ''}
+    ${course[0].prerequisites ? `y necesitas tener como prerequisito ${course[0].prerequisites}` : ''}`;
+}
+
+//Formato para consultar todos los portales
+function formatDataTotalPortales(listPortals) {
+    if (listPortals.length === 0) {
+        return `No hay portales activos`;
+    }
+    const portales = listPortals.map(curso => curso.name).join(', ');
+    return `Estos son los portales activos : ${portales}.                              ¿De cuál portal quisieras más información?`;
+}
+
+//Formato para informacion individual del portal consultado
+function formatDataPortal(obj) {
+    const respuesta = [`Esta es la información del ${obj.name}, 
+    ${obj.address ? `la dirección del portal es: ${obj.address}, ` : ''} 
+    ${obj.email ? `su Email es: ${obj.email}, ` : ''}
+    ${obj.phone ? `su linea de atencion: ${obj.phone}, ` : ''} 
+    ${obj.mondayStartTime && obj.mondayEndTime ? `tiene horarios de lunes a viernes de  ${extractSubstring(obj.mondayStartTime)} a ${extractSubstring(obj.mondayEndTime)} ` : ''}
+    ${obj.saturdayStartTime && obj.saturdayEndTime ? `y sabados de ${extractSubstring(obj.saturdayStartTime)} a ${extractSubstring(obj.saturdayEndTime)}` : ''}
+    . Preguntame sobre algun curso y te dire si esta disponible en el portal que me nombres`,
+
+    `Te proporciono la información sobre ${obj.name}. 
+    ${obj.address ? `La dirección del portal es: ${obj.address}.` : ''} 
+    ${obj.email ? `El correo electrónico es: ${obj.email}.` : ''} 
+    ${obj.phone ? `El número de atención es: ${obj.phone}.` : ''} 
+    ${obj.mondayStartTime && obj.mondayEndTime ? `El horario de atención es de lunes a viernes, de ${extractSubstring(obj.mondayStartTime)} a ${extractSubstring(obj.mondayEndTime)}.` : ''} 
+    ${obj.saturdayStartTime && obj.saturdayEndTime ? `Y los sábados, de ${extractSubstring(obj.saturdayStartTime)} a ${extractSubstring(obj.saturdayEndTime)}.` : ''} 
+    Si deseas saber sobre algún curso, indícame el nombre y el portal, te confirmaré si está disponible allí.`
+    ]
+
+    const indiceAleatorio = Math.floor(Math.random() * respuesta.length);
+    const elementoAleatorio = respuesta[indiceAleatorio];
+
+    return elementoAleatorio;
+}
+
+//Formato para cursos de un portal
+function formatDataCursos(listCursos, portales) {
+    if (listCursos.length === 0) {
+        return `No hay cursos disponibles para el portal ${portales}.`;
+    }
+    const cursos = listCursos.map(curso => curso.name).join(', ');
+    return `Estos son los cursos del ${portales}: ${cursos}. ¿Cuál curso quisieras más información?`;
 }
 
 
@@ -521,9 +475,6 @@ function findMostSimilarName(docs, portalName) {
 }
 
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, async () => {
-    //const text = await getDataPortal('portal perdomo');
-    //console.log(text)
     console.log("inicio el servicio")
 });
